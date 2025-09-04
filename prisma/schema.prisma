@@ -1,0 +1,41 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  watchlists Watchlist[]
+  createdAt DateTime @default(now())
+}
+
+model Watchlist {
+  id        String   @id @default(uuid())
+  name      String
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  movies    WatchlistMovie[]
+  createdAt DateTime @default(now())
+}
+
+model WatchlistMovie {
+  id           String    @id @default(uuid())
+  watchlist    Watchlist @relation(fields: [watchlistId], references: [id])
+  watchlistId  String
+  movieId      Int
+  movieTitle   String
+  posterPath   String
+  createdAt    DateTime @default(now())
+
+  @@unique([watchlistId, movieId]) // Ensures a movie can't be in the same list twice
+}
