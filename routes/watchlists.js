@@ -171,4 +171,34 @@ router.delete("/:watchlistId/movies/:movieId", auth, async (req, res) => {
   }
 });
 
+// @route   GET /api/watchlists/:id
+// @desc    Get a single watchlist by ID
+// @access  Private
+router.get("/:id", auth, async (req, res) => {
+  try {
+    const watchlist = await prisma.watchlist.findFirst({
+      where: {
+        id: req.params.id,
+        userId: req.user.id, // Ensures the user owns this watchlist
+      },
+      include: {
+        movies: {
+          orderBy: {
+            createdAt: "desc", // Show newest added movies first
+          },
+        },
+      },
+    });
+
+    if (!watchlist) {
+      return res.status(404).json({ msg: "Watchlist not found" });
+    }
+
+    res.json(watchlist);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server Error");
+  }
+});
+
 module.exports = router;
