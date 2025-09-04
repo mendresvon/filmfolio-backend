@@ -15,7 +15,7 @@ app.use("/api/auth", require("./routes/auth"));
 
 // Test Route
 app.get("/", (req, res) => {
-  res.send("Cinemalist API is running...");
+  res.send("FilmFolio API is running...");
 });
 
 app.listen(PORT, () => {
