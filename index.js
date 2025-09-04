@@ -12,6 +12,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // API Routes
 app.use("/api/auth", require("./routes/auth"));
+app.use("/api/watchlists", require("./routes/watchlists"));
 
 // Test Route
 app.get("/", (req, res) => {
