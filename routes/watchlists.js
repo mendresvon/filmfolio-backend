@@ -176,24 +176,31 @@ router.delete("/:watchlistId/movies/:movieId", auth, async (req, res) => {
 // @access  Private
 router.get("/:id", auth, async (req, res) => {
   try {
-    const watchlist = await prisma.watchlist.findFirst({
+    // Step 1: Find the watchlist by its ID first.
+    const watchlist = await prisma.watchlist.findUnique({
       where: {
         id: req.params.id,
-        userId: req.user.id, // Ensures the user owns this watchlist
       },
       include: {
         movies: {
           orderBy: {
-            createdAt: "desc", // Show newest added movies first
+            createdAt: "desc",
           },
         },
       },
     });
 
+    // Step 2: If it doesn't exist at all, return a 404.
     if (!watchlist) {
       return res.status(404).json({ msg: "Watchlist not found" });
     }
 
+    // Step 3: If it exists, check if the logged-in user owns it.
+    if (watchlist.userId !== req.user.id) {
+      return res.status(401).json({ msg: "Authorization denied" });
+    }
+
+    // If both checks pass, send the watchlist.
     res.json(watchlist);
   } catch (err) {
     console.error(err.message);
