@@ -21,12 +21,14 @@ router.get("/search", auth, async (req, res) => {
     const response = await axios.get(tmdbUrl);
 
     // We can format the data to send back only what our frontend needs
-    const formattedMovies = response.data.results.map((movie) => ({
-      id: movie.id,
-      title: movie.title,
-      posterPath: movie.poster_path,
-      releaseDate: movie.release_date,
-    }));
+    const formattedMovies = response.data.results
+      .filter((movie) => movie.poster_path) // This line removes the bad data
+      .map((movie) => ({
+        id: movie.id,
+        title: movie.title,
+        posterPath: movie.poster_path,
+        releaseDate: movie.release_date,
+      }));
 
     res.json(formattedMovies);
   } catch (err) {
