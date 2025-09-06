@@ -30,6 +30,46 @@ router.post("/", auth, async (req, res) => {
   }
 });
 
+// @route   PUT /api/watchlists/:id
+// @desc    Update a watchlist (name and description)
+// @access  Private
+router.put("/:id", auth, async (req, res) => {
+  const { name, description } = req.body;
+  const watchlistId = req.params.id;
+  const userId = req.user.id;
+
+  if (!name) {
+    return res.status(400).json({ msg: "Watchlist name is required" });
+  }
+
+  try {
+    const watchlist = await prisma.watchlist.findUnique({
+      where: { id: watchlistId },
+    });
+
+    if (!watchlist) {
+      return res.status(404).json({ msg: "Watchlist not found" });
+    }
+
+    if (watchlist.userId !== userId) {
+      return res.status(401).json({ msg: "User not authorized" });
+    }
+
+    const updatedWatchlist = await prisma.watchlist.update({
+      where: { id: watchlistId },
+      data: {
+        name: name,
+        description: description, // Can be null or a string
+      },
+    });
+
+    res.json(updatedWatchlist);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server Error");
+  }
+});
+
 // @route   GET /api/watchlists
 // @desc    Get all watchlists for a user
 // @access  Private
