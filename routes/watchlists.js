@@ -83,7 +83,7 @@ router.get("/", auth, async (req, res) => {
         movies: true, // Include all associated movies for each watchlist
       },
       orderBy: {
-        createdAt: "desc",
+        createdAt: "asc",
       },
     });
 
@@ -224,7 +224,7 @@ router.get("/:id", auth, async (req, res) => {
       include: {
         movies: {
           orderBy: {
-            createdAt: "desc",
+            createdAt: "asc",
           },
         },
       },
