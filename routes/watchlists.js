@@ -61,6 +61,7 @@ router.put("/:id", auth, async (req, res) => {
         name: name,
         description: description, // Can be null or a string
       },
+      include: { movies: true }
     });
 
     res.json(updatedWatchlist);
