@@ -1,31 +1,40 @@
 const mongoose = require("mongoose");
 
-const WatchlistSchema = new mongoose.Schema({
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User", // Links this watchlist to a specific User
-    required: true,
-  },
-  name: {
-    type: String,
-    required: true,
-  },
-  description: {
-    type: String,
-  },
-  // Embedded Array: No more separate "WatchlistMovie" table needed!
-  movies: [
-    {
-      movieId: Number, // TMDB ID
-      movieTitle: String,
-      posterPath: String,
-      createdAt: { type: Date, default: Date.now },
+const WatchlistSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
-  ],
-  createdAt: {
-    type: Date,
-    default: Date.now,
+    name: {
+      type: String,
+      required: true,
+    },
+    description: {
+      type: String,
+    },
+    movies: [
+      {
+        movieId: Number,
+        movieTitle: String,
+        posterPath: String,
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
+  {
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
+);
+
+WatchlistSchema.virtual("id").get(function () {
+  return this._id.toHexString();
 });
 
 module.exports = mongoose.model("Watchlist", WatchlistSchema);
