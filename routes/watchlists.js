@@ -1,93 +1,28 @@
 const express = require("express");
 const router = express.Router();
-const { PrismaClient } = require("@prisma/client");
-const auth = require("../middleware/auth"); // Import our auth middleware
+const auth = require("../middleware/auth");
+const Watchlist = require("../models/Watchlist"); // Import the Mongoose Model
 
-const prisma = new PrismaClient();
-
-// @route   POST /api/watchlists
-// @desc    Create a new watchlist
-// @access  Private
+// @route   POST /api/watchlists (Create)
 router.post("/", auth, async (req, res) => {
-  const { name } = req.body;
-
-  if (!name) {
-    return res.status(400).json({ msg: "Please provide a name for the watchlist" });
-  }
-
   try {
-    const newWatchlist = await prisma.watchlist.create({
-      data: {
-        name: name,
-        userId: req.user.id,
-      },
+    const newWatchlist = new Watchlist({
+      name: req.body.name,
+      user: req.user.id, // Link to the user
+      movies: []
     });
-
-    res.status(201).json(newWatchlist);
+    const watchlist = await newWatchlist.save();
+    res.json(watchlist);
   } catch (err) {
     console.error(err.message);
     res.status(500).send("Server Error");
   }
 });
 
-// @route   PUT /api/watchlists/:id
-// @desc    Update a watchlist (name and description)
-// @access  Private
-router.put("/:id", auth, async (req, res) => {
-  const { name, description } = req.body;
-  const watchlistId = req.params.id;
-  const userId = req.user.id;
-
-  if (!name) {
-    return res.status(400).json({ msg: "Watchlist name is required" });
-  }
-
-  try {
-    const watchlist = await prisma.watchlist.findUnique({
-      where: { id: watchlistId },
-    });
-
-    if (!watchlist) {
-      return res.status(404).json({ msg: "Watchlist not found" });
-    }
-
-    if (watchlist.userId !== userId) {
-      return res.status(401).json({ msg: "User not authorized" });
-    }
-
-    const updatedWatchlist = await prisma.watchlist.update({
-      where: { id: watchlistId },
-      data: {
-        name: name,
-        description: description, // Can be null or a string
-      },
-      include: { movies: true }
-    });
-
-    res.json(updatedWatchlist);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
-  }
-});
-
-// @route   GET /api/watchlists
-// @desc    Get all watchlists for a user
-// @access  Private
+// @route   GET /api/watchlists (Fetch All for Dashboard)
 router.get("/", auth, async (req, res) => {
   try {
-    const watchlists = await prisma.watchlist.findMany({
-      where: {
-        userId: req.user.id,
-      },
-      include: {
-        movies: true, // Include all associated movies for each watchlist
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-    });
-
+    const watchlists = await Watchlist.find({ user: req.user.id }).sort({ createdAt: -1 });
     res.json(watchlists);
   } catch (err) {
     console.error(err.message);
@@ -95,34 +30,66 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/watchlists/:id
-// @desc    Delete a watchlist
-// @access  Private
-router.delete("/:id", auth, async (req, res) => {
+// @route   GET /api/watchlists/:id (Fetch Single Detail)
+router.get("/:id", auth, async (req, res) => {
   try {
-    const watchlistId = req.params.id;
-    const userId = req.user.id;
+    // 1. Find the watchlist by ID
+    const watchlist = await Watchlist.findById(req.params.id);
 
-    const watchlist = await prisma.watchlist.findUnique({
-      where: { id: watchlistId },
-    });
-
+    // 2. Check if it exists
     if (!watchlist) {
       return res.status(404).json({ msg: "Watchlist not found" });
     }
 
-    if (watchlist.userId !== userId) {
+    // 3. Check ownership (Security)
+    if (watchlist.user.toString() !== req.user.id) {
       return res.status(401).json({ msg: "User not authorized" });
     }
 
-    await prisma.watchlistMovie.deleteMany({
-      where: { watchlistId: watchlistId },
-    });
+    res.json(watchlist);
+  } catch (err) {
+    console.error(err.message);
+    // If ID is invalid (not a MongoDB ObjectId), return 404
+    if (err.kind === 'ObjectId') {
+        return res.status(404).json({ msg: "Watchlist not found" });
+    }
+    res.status(500).send("Server Error");
+  }
+});
 
-    await prisma.watchlist.delete({
-      where: { id: watchlistId },
-    });
+// @route   POST /api/watchlists/:id/movies (Add Movie)
+router.post("/:id/movies", auth, async (req, res) => {
+  const { movieId, movieTitle, posterPath } = req.body;
+  try {
+    const watchlist = await Watchlist.findById(req.params.id);
 
+    if (!watchlist) return res.status(404).json({ msg: "Not found" });
+    if (watchlist.user.toString() !== req.user.id) return res.status(401).json({ msg: "Not authorized" });
+
+    // Check for duplicates
+    if (watchlist.movies.some(m => m.movieId === movieId)) {
+      return res.status(400).json({ msg: "Movie already in list" });
+    }
+
+    // Add to array
+    watchlist.movies.push({ movieId, movieTitle, posterPath });
+    await watchlist.save();
+
+    res.json(watchlist.movies);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server Error");
+  }
+});
+
+// @route   DELETE /api/watchlists/:id (Delete List)
+router.delete("/:id", auth, async (req, res) => {
+  try {
+    const watchlist = await Watchlist.findById(req.params.id);
+    if (!watchlist) return res.status(404).json({ msg: "Not found" });
+    if (watchlist.user.toString() !== req.user.id) return res.status(401).json({ msg: "Not authorized" });
+
+    await watchlist.deleteOne();
     res.json({ msg: "Watchlist removed" });
   } catch (err) {
     console.error(err.message);
@@ -130,119 +97,18 @@ router.delete("/:id", auth, async (req, res) => {
   }
 });
 
-// @route   POST /api/watchlists/:id/movies
-// @desc    Add a movie to a watchlist
-// @access  Private
-router.post("/:id/movies", auth, async (req, res) => {
-  const { movieId, movieTitle, posterPath } = req.body;
-  const watchlistId = req.params.id;
-  const userId = req.user.id;
-
-  if (!movieId || !movieTitle || posterPath === undefined) {
-    return res.status(400).json({ msg: "Please provide movieId, movieTitle, and posterPath" });
-  }
-
-  try {
-    const watchlist = await prisma.watchlist.findUnique({
-      where: { id: watchlistId },
-    });
-
-    if (!watchlist) {
-      return res.status(404).json({ msg: "Watchlist not found" });
-    }
-
-    if (watchlist.userId !== userId) {
-      return res.status(401).json({ msg: "User not authorized" });
-    }
-
-    const newWatchlistMovie = await prisma.watchlistMovie.create({
-      data: {
-        watchlistId: watchlistId,
-        movieId: movieId,
-        movieTitle: movieTitle,
-        posterPath: posterPath,
-      },
-    });
-
-    res.status(201).json(newWatchlistMovie);
-  } catch (err) {
-    if (err.code === "P2002") {
-      return res.status(409).json({ msg: "Movie is already in this watchlist." });
-    }
-    console.error(err.message);
-    res.status(500).send("Server Error");
-  }
-});
-
-// @route   DELETE /api/watchlists/:watchlistId/movies/:movieId
-// @desc    Remove a movie from a watchlist
-// @access  Private
+// @route   DELETE /api/watchlists/:watchlistId/movies/:movieId (Remove Movie)
 router.delete("/:watchlistId/movies/:movieId", auth, async (req, res) => {
-  const { watchlistId, movieId } = req.params;
-  const userId = req.user.id;
-
   try {
-    const watchlist = await prisma.watchlist.findUnique({
-      where: { id: watchlistId },
-    });
+    const watchlist = await Watchlist.findById(req.params.watchlistId);
+    if (!watchlist) return res.status(404).json({ msg: "Not found" });
+    if (watchlist.user.toString() !== req.user.id) return res.status(401).json({ msg: "Not authorized" });
 
-    if (!watchlist) {
-      return res.status(404).json({ msg: "Watchlist not found" });
-    }
+    // Filter out the movie
+    watchlist.movies = watchlist.movies.filter(m => m.movieId !== parseInt(req.params.movieId));
+    await watchlist.save();
 
-    if (watchlist.userId !== userId) {
-      return res.status(401).json({ msg: "User not authorized" });
-    }
-
-    const deleteResult = await prisma.watchlistMovie.deleteMany({
-      where: {
-        watchlistId: watchlistId,
-        movieId: parseInt(movieId),
-      },
-    });
-
-    if (deleteResult.count === 0) {
-      return res.status(404).json({ msg: "Movie not found in this watchlist" });
-    }
-
-    res.json({ msg: "Movie removed from watchlist" });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
-  }
-});
-
-// @route   GET /api/watchlists/:id
-// @desc    Get a single watchlist by ID
-// @access  Private
-router.get("/:id", auth, async (req, res) => {
-  try {
-    // Step 1: Find the watchlist by its ID first.
-    const watchlist = await prisma.watchlist.findUnique({
-      where: {
-        id: req.params.id,
-      },
-      include: {
-        movies: {
-          orderBy: {
-            createdAt: "asc",
-          },
-        },
-      },
-    });
-
-    // Step 2: If it doesn't exist at all, return a 404.
-    if (!watchlist) {
-      return res.status(404).json({ msg: "Watchlist not found" });
-    }
-
-    // Step 3: If it exists, check if the logged-in user owns it.
-    if (watchlist.userId !== req.user.id) {
-      return res.status(401).json({ msg: "Authorization denied" });
-    }
-
-    // If both checks pass, send the watchlist.
-    res.json(watchlist);
+    res.json({ msg: "Movie removed" });
   } catch (err) {
     console.error(err.message);
     res.status(500).send("Server Error");
