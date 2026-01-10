@@ -84,6 +84,38 @@ router.post("/:id/movies", auth, async (req, res) => {
   }
 });
 
+// @route   PUT /api/watchlists/:id (Update Name/Description)
+router.put("/:id", auth, async (req, res) => {
+  const { name, description } = req.body;
+
+  // Build object of fields to update
+  const watchlistFields = {};
+  if (name) watchlistFields.name = name;
+  if (description) watchlistFields.description = description;
+
+  try {
+    let watchlist = await Watchlist.findById(req.params.id);
+
+    if (!watchlist) return res.status(404).json({ msg: "Watchlist not found" });
+
+    // Verify user owns the watchlist
+    if (watchlist.user.toString() !== req.user.id) {
+      return res.status(401).json({ msg: "Not authorized" });
+    }
+
+    watchlist = await Watchlist.findByIdAndUpdate(
+      req.params.id,
+      { $set: watchlistFields },
+      { new: true }
+    );
+
+    res.json(watchlist);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server Error");
+  }
+});
+
 // @route   DELETE /api/watchlists/:id (Delete List)
 router.delete("/:id", auth, async (req, res) => {
   try {
