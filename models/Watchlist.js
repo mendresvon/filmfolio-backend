@@ -13,6 +13,7 @@ const WatchlistSchema = new mongoose.Schema({
   description: {
     type: String,
   },
+  // embedded movie objects for quicker access
   movies: [
     {
       movieId: Number,

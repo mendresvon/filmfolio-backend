@@ -3,9 +3,7 @@ const router = express.Router();
 const axios = require("axios");
 const auth = require("../middleware/auth");
 
-// @route   GET /api/movies/search
-// @desc    Search for movies from TMDB
-// @access  Private
+// search movies from tmdb
 router.get("/search", auth, async (req, res) => {
   const { query } = req.query;
 
@@ -20,9 +18,9 @@ router.get("/search", auth, async (req, res) => {
   try {
     const response = await axios.get(tmdbUrl);
 
-    // We can format the data to send back only what our frontend needs
+    // format data for frontend and remove incomplete entries
     const formattedMovies = response.data.results
-      .filter((movie) => movie.poster_path) // This line removes the bad data
+      .filter((movie) => movie.poster_path) // remove movies without posters
       .map((movie) => ({
         id: movie.id,
         title: movie.title,

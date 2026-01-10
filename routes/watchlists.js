@@ -1,15 +1,15 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
-const Watchlist = require("../models/Watchlist"); // Import the Mongoose Model
+const Watchlist = require("../models/Watchlist");
 
-// @route   POST /api/watchlists (Create)
+// create watchlist
 router.post("/", auth, async (req, res) => {
   try {
     const newWatchlist = new Watchlist({
       name: req.body.name,
-      description: req.body.description || "", // ensure description is saved
-      user: req.user.id, // Link to the user
+      description: req.body.description || "",
+      user: req.user.id,
       movies: [],
     });
     const watchlist = await newWatchlist.save();
@@ -20,7 +20,7 @@ router.post("/", auth, async (req, res) => {
   }
 });
 
-// @route   GET /api/watchlists (Fetch All for Dashboard)
+// fetch all watchlists
 router.get("/", auth, async (req, res) => {
   try {
     const watchlists = await Watchlist.find({ user: req.user.id }).sort({ createdAt: 1 });
@@ -31,18 +31,18 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
-// @route   GET /api/watchlists/:id (Fetch Single Detail)
+// fetch single watchlist
 router.get("/:id", auth, async (req, res) => {
   try {
-    // 1. Find the watchlist by ID
+    // find watchlist
     const watchlist = await Watchlist.findById(req.params.id);
 
-    // 2. Check if it exists
+    // check existence
     if (!watchlist) {
       return res.status(404).json({ msg: "Watchlist not found" });
     }
 
-    // 3. Check ownership (Security)
+    // check ownership
     if (watchlist.user.toString() !== req.user.id) {
       return res.status(401).json({ msg: "User not authorized" });
     }
@@ -50,7 +50,7 @@ router.get("/:id", auth, async (req, res) => {
     res.json(watchlist);
   } catch (err) {
     console.error(err.message);
-    // If ID is invalid (not a MongoDB ObjectId), return 404
+    // return 404 on invalid id
     if (err.kind === "ObjectId") {
       return res.status(404).json({ msg: "Watchlist not found" });
     }
@@ -58,7 +58,7 @@ router.get("/:id", auth, async (req, res) => {
   }
 });
 
-// @route   POST /api/watchlists/:id/movies (Add Movie)
+// add movie to watchlist
 router.post("/:id/movies", auth, async (req, res) => {
   const { movieId, movieTitle, posterPath } = req.body;
   try {
@@ -68,12 +68,12 @@ router.post("/:id/movies", auth, async (req, res) => {
     if (watchlist.user.toString() !== req.user.id)
       return res.status(401).json({ msg: "Not authorized" });
 
-    // Check for duplicates
+    // check duplicates
     if (watchlist.movies.some((m) => m.movieId === movieId)) {
       return res.status(400).json({ msg: "Movie already in list" });
     }
 
-    // Add to array
+    // add to list
     watchlist.movies.push({ movieId, movieTitle, posterPath });
     await watchlist.save();
 
@@ -84,11 +84,11 @@ router.post("/:id/movies", auth, async (req, res) => {
   }
 });
 
-// @route   PUT /api/watchlists/:id (Update Name/Description)
+// update watchlist
 router.put("/:id", auth, async (req, res) => {
   const { name, description } = req.body;
 
-  // Build object of fields to update
+  // build update object
   const watchlistFields = {};
   if (name) watchlistFields.name = name;
   if (description) watchlistFields.description = description;
@@ -98,7 +98,7 @@ router.put("/:id", auth, async (req, res) => {
 
     if (!watchlist) return res.status(404).json({ msg: "Watchlist not found" });
 
-    // Verify user owns the watchlist
+    // verify ownership
     if (watchlist.user.toString() !== req.user.id) {
       return res.status(401).json({ msg: "Not authorized" });
     }
@@ -116,7 +116,7 @@ router.put("/:id", auth, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/watchlists/:id (Delete List)
+// delete watchlist
 router.delete("/:id", auth, async (req, res) => {
   try {
     const watchlist = await Watchlist.findById(req.params.id);
@@ -132,7 +132,7 @@ router.delete("/:id", auth, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/watchlists/:watchlistId/movies/:movieId (Remove Movie)
+// remove movie from watchlist
 router.delete("/:watchlistId/movies/:movieId", auth, async (req, res) => {
   try {
     const watchlist = await Watchlist.findById(req.params.watchlistId);
@@ -140,7 +140,7 @@ router.delete("/:watchlistId/movies/:movieId", auth, async (req, res) => {
     if (watchlist.user.toString() !== req.user.id)
       return res.status(401).json({ msg: "Not authorized" });
 
-    // Filter out the movie
+    // filter out movie
     watchlist.movies = watchlist.movies.filter((m) => m.movieId !== parseInt(req.params.movieId));
     await watchlist.save();
 
