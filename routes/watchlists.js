@@ -8,8 +8,9 @@ router.post("/", auth, async (req, res) => {
   try {
     const newWatchlist = new Watchlist({
       name: req.body.name,
+      description: req.body.description || "", // ensure description is saved
       user: req.user.id, // Link to the user
-      movies: []
+      movies: [],
     });
     const watchlist = await newWatchlist.save();
     res.json(watchlist);
@@ -22,7 +23,7 @@ router.post("/", auth, async (req, res) => {
 // @route   GET /api/watchlists (Fetch All for Dashboard)
 router.get("/", auth, async (req, res) => {
   try {
-    const watchlists = await Watchlist.find({ user: req.user.id }).sort({ createdAt: -1 });
+    const watchlists = await Watchlist.find({ user: req.user.id }).sort({ createdAt: 1 });
     res.json(watchlists);
   } catch (err) {
     console.error(err.message);
@@ -50,8 +51,8 @@ router.get("/:id", auth, async (req, res) => {
   } catch (err) {
     console.error(err.message);
     // If ID is invalid (not a MongoDB ObjectId), return 404
-    if (err.kind === 'ObjectId') {
-        return res.status(404).json({ msg: "Watchlist not found" });
+    if (err.kind === "ObjectId") {
+      return res.status(404).json({ msg: "Watchlist not found" });
     }
     res.status(500).send("Server Error");
   }
@@ -64,10 +65,11 @@ router.post("/:id/movies", auth, async (req, res) => {
     const watchlist = await Watchlist.findById(req.params.id);
 
     if (!watchlist) return res.status(404).json({ msg: "Not found" });
-    if (watchlist.user.toString() !== req.user.id) return res.status(401).json({ msg: "Not authorized" });
+    if (watchlist.user.toString() !== req.user.id)
+      return res.status(401).json({ msg: "Not authorized" });
 
     // Check for duplicates
-    if (watchlist.movies.some(m => m.movieId === movieId)) {
+    if (watchlist.movies.some((m) => m.movieId === movieId)) {
       return res.status(400).json({ msg: "Movie already in list" });
     }
 
@@ -87,7 +89,8 @@ router.delete("/:id", auth, async (req, res) => {
   try {
     const watchlist = await Watchlist.findById(req.params.id);
     if (!watchlist) return res.status(404).json({ msg: "Not found" });
-    if (watchlist.user.toString() !== req.user.id) return res.status(401).json({ msg: "Not authorized" });
+    if (watchlist.user.toString() !== req.user.id)
+      return res.status(401).json({ msg: "Not authorized" });
 
     await watchlist.deleteOne();
     res.json({ msg: "Watchlist removed" });
@@ -102,10 +105,11 @@ router.delete("/:watchlistId/movies/:movieId", auth, async (req, res) => {
   try {
     const watchlist = await Watchlist.findById(req.params.watchlistId);
     if (!watchlist) return res.status(404).json({ msg: "Not found" });
-    if (watchlist.user.toString() !== req.user.id) return res.status(401).json({ msg: "Not authorized" });
+    if (watchlist.user.toString() !== req.user.id)
+      return res.status(401).json({ msg: "Not authorized" });
 
     // Filter out the movie
-    watchlist.movies = watchlist.movies.filter(m => m.movieId !== parseInt(req.params.movieId));
+    watchlist.movies = watchlist.movies.filter((m) => m.movieId !== parseInt(req.params.movieId));
     await watchlist.save();
 
     res.json({ msg: "Movie removed" });
