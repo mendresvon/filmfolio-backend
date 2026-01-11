@@ -20,43 +20,51 @@ router.get("/search", auth, async (req, res) => {
 
   const cacheKey = `movies:search:${query.toLowerCase().trim()}`;
 
+  // Try the cache first, but don't let Redis issues block us
+  let cachedData = null;
   try {
-    // 2. Check if the results are already in the cache
-    const cachedData = await redis.get(cacheKey);
-    
-    if (cachedData) {
-      console.log(`Cache Hit for: ${query}`);
-      return res.json(JSON.parse(cachedData));
-    }
+    cachedData = await redis.get(cacheKey);
+  } catch (redisError) {
+    // Redis is down - that's fine, we'll just fetch from the API
+    console.warn(`Redis unavailable, skipping cache: ${redisError.message}`);
+  }
 
-    // 3. Cache Miss: Fetch from TMDB API
-    console.log(`Cache Miss for: ${query}. Fetching from TMDB...`);
-    
-    // Use encodeURIComponent to handle special characters in titles
+  if (cachedData) {
+    console.log(`Cache Hit for: ${query}`);
+    return res.json(JSON.parse(cachedData));
+  }
+
+  // Cache miss or Redis unavailable - fetch from TMDB
+  console.log(`Cache Miss for: ${query}. Fetching from TMDB...`);
+
+  try {
     const tmdbUrl = `https://api.themoviedb.org/3/search/movie?api_key=${
       process.env.TMDB_API_KEY
     }&query=${encodeURIComponent(query)}`;
 
     const response = await axios.get(tmdbUrl);
 
-    // 4. Format data for frontend and remove entries without posters
-    // This ensures your frontend doesn't break when a movie has no image
+    // Format data for frontend and remove entries without posters
     const formattedMovies = response.data.results
-      .filter((movie) => movie.poster_path) 
+      .filter((movie) => movie.poster_path)
       .map((movie) => ({
-        id: movie.id,           // Expected by handleAddMovie
-        title: movie.title,     // Expected by resultsGrid
-        posterPath: movie.poster_path, // Matches frontend property name
+        id: movie.id,
+        title: movie.title,
+        posterPath: movie.poster_path,
         releaseDate: movie.release_date,
       }));
 
-    // 5. Store the formatted results in Redis for 1 hour (3600 seconds)
-    await redis.set(cacheKey, JSON.stringify(formattedMovies), "EX", 3600);
+    // Try to cache the results, but don't fail if Redis is down
+    try {
+      await redis.set(cacheKey, JSON.stringify(formattedMovies), "EX", 3600);
+    } catch (redisError) {
+      console.warn(`Failed to cache results: ${redisError.message}`);
+    }
 
     res.json(formattedMovies);
   } catch (error) {
-    console.error("Redis or TMDB Error:", error.message);
-    res.status(500).json({ error: "Server Error" });
+    console.error("TMDB API Error:", error.message);
+    res.status(500).json({ error: "Failed to fetch movies" });
   }
 });
 
