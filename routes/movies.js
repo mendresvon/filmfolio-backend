@@ -4,8 +4,31 @@ const axios = require("axios");
 const auth = require("../middleware/auth"); // Keep auth for security
 const Redis = require("ioredis");
 
-// Initialize Redis using an environment variable
-const redis = new Redis(process.env.REDIS_URL);
+// Redis with fallback - won't break if unavailable
+let redis = null;
+let redisAvailable = false;
+
+if (process.env.REDIS_URL) {
+  redis = new Redis(process.env.REDIS_URL, {
+    connectTimeout: 5000,
+    commandTimeout: 3000,
+    maxRetriesPerRequest: 1,
+    retryStrategy: (times) => (times > 2 ? null : 500),
+    lazyConnect: true,
+  });
+
+  redis.on("connect", () => {
+    redisAvailable = true;
+    console.log("Redis connected successfully");
+  });
+
+  redis.on("error", (err) => {
+    redisAvailable = false;
+    console.warn(`Redis error: ${err.message}`);
+  });
+
+  redis.connect().catch(() => {});
+}
 
 // @route   GET /api/movies/search
 // @desc    Search movies from TMDB with Redis caching
@@ -20,13 +43,15 @@ router.get("/search", auth, async (req, res) => {
 
   const cacheKey = `movies:search:${query.toLowerCase().trim()}`;
 
-  // Try the cache first, but don't let Redis issues block us
+  // Try the cache first, but only if Redis is available
   let cachedData = null;
-  try {
-    cachedData = await redis.get(cacheKey);
-  } catch (redisError) {
-    // Redis is down - that's fine, we'll just fetch from the API
-    console.warn(`Redis unavailable, skipping cache: ${redisError.message}`);
+  if (redis && redisAvailable) {
+    try {
+      cachedData = await redis.get(cacheKey);
+    } catch (redisError) {
+      // Redis went down mid-request - that's fine, we'll just fetch from the API
+      console.warn(`Redis unavailable, skipping cache: ${redisError.message}`);
+    }
   }
 
   if (cachedData) {
@@ -54,11 +79,13 @@ router.get("/search", auth, async (req, res) => {
         releaseDate: movie.release_date,
       }));
 
-    // Try to cache the results, but don't fail if Redis is down
-    try {
-      await redis.set(cacheKey, JSON.stringify(formattedMovies), "EX", 3600);
-    } catch (redisError) {
-      console.warn(`Failed to cache results: ${redisError.message}`);
+    // Try to cache the results, but only if Redis is available
+    if (redis && redisAvailable) {
+      try {
+        await redis.set(cacheKey, JSON.stringify(formattedMovies), "EX", 3600);
+      } catch (redisError) {
+        console.warn(`Failed to cache results: ${redisError.message}`);
+      }
     }
 
     res.json(formattedMovies);
