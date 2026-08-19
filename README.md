@@ -8,11 +8,10 @@ Language Select / 語言選擇：
 
 # English
 
-FilmFolio is a secure, high-performance, containerized movie cataloging and watchlist management backend built on **Node.js** and **Express**. It leverages **MongoDB Atlas** for document-based persistence, **Redis** for performant search caching with high-availability fallbacks, and **Docker** for standardized local development and cloud deployment. 
+FilmFolio Backend is a Node.js and Express API for movie search and watchlists. It stores data in **MongoDB Atlas**, caches search results in **Redis**, and runs in **Docker**.
 
-The application is deployed on **Google Cloud Run** using a fully automated continuous deployment pipeline powered by **GitHub Actions** and **Google Cloud Build**.
+The service is deployed on **Google Cloud Run** with **GitHub Actions** and **Google Cloud Build**.
 
-This repository is optimized for scalability, resilience, and code quality, making it a robust reference project for graduate-level systems and software engineering.
 
 ---
 
@@ -52,15 +51,15 @@ graph TD
 
 ## Technical Highlights
 
-### 🚀 Resilient Cache-Aside Implementation (Redis)
-To minimize latency and avoid exceeding external API limits, the `/api/movies/search` endpoint utilizes a **cache-aside** architecture with Redis:
-* **High Availability Fallback:** The backend implements a non-blocking try-catch connection wrapper around `ioredis`. If the Redis instance experiences downtime or network latency, queries automatically fallback to the external TMDB API, ensuring 100% service uptime.
-* **Auto-Expiration:** Cached search queries are set with an explicit Time-To-Live (TTL) of 1 hour (`EX 3600`) to guarantee fresh results while offloading TMDB API traffic.
+### Redis cache-aside implementation
+The `/api/movies/search` endpoint uses a **cache-aside** architecture with Redis:
+* **Fallback:** If Redis is unavailable, queries use the TMDB API directly.
+* **Expiration:** Cached search queries use a one-hour TTL (`EX 3600`).
 
-### 🛡️ Secure Authorization & Data Integrity
+### Authorization and data integrity
 * **State-Free JWT Authentication:** Route protection is handled by a custom HTTP header parser middleware verifying signatures with custom JSON Web Tokens (`Authorization: Bearer <token>`).
 * **Atomic MongoDB Updates:** To prevent race conditions during concurrent requests (e.g., adding the same movie to a watchlist twice), the backend uses MongoDB atomic updates like `$push` coupled with unique matching predicates (`$ne`), and `$pull` for instant updates.
-* **Robust Input Sanitization:** Uses `express-validator` to enforce strict payload schemas on signup/login, ensuring sql/no-sql injection attempts and malformed inputs are blocked before hitting controllers.
+* **Input validation:** `express-validator` checks signup and login payloads before they reach the controllers.
 
 ### 🐳 Modern DevOps & Containerization
 * **Multi-Stage Container Architecture:** The `Dockerfile` uses a lightweight `node:18-alpine` base image to maintain a minimal surface area and speed up deployment runtimes.
