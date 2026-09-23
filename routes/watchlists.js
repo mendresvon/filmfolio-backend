@@ -3,15 +3,21 @@ const router = express.Router();
 const { check, validationResult } = require("express-validator");
 const auth = require("../middleware/auth");
 const Watchlist = require("../models/Watchlist");
-
-const MAX_MOVIES_PER_WATCHLIST = 500;
+const {
+  MAX_MOVIES_PER_WATCHLIST,
+  buildAddMovieFilter,
+} = require("../utils/watchlistQueries");
+const {
+  createWatchlistNameValidator,
+  updateWatchlistNameValidator,
+} = require("../validators/watchlistValidators");
 
 // create watchlist
 router.post(
   "/",
   [
     auth,
-    check("name", "Name is required").notEmpty().trim(),
+    createWatchlistNameValidator,
     check("name", "Name must be under 100 characters").isLength({ max: 100 }),
     check("description", "Description must be under 500 characters").optional().isLength({ max: 500 }),
   ],
@@ -75,7 +81,7 @@ router.get("/:id", auth, async (req, res) => {
   }
 });
 
-// add movie to watchlist - uses atomic $addToSet to prevent race conditions
+// Add movie only when the ID is unique and the list is below its limit.
 router.post("/:id/movies", auth, async (req, res) => {
   const { movieId, movieTitle, posterPath } = req.body;
 
@@ -98,13 +104,14 @@ router.post("/:id/movies", auth, async (req, res) => {
       return res.status(400).json({ msg: `Watchlist is full (max ${MAX_MOVIES_PER_WATCHLIST} movies)` });
     }
 
-    // atomic update: only adds if movie doesn't exist (prevents race condition)
+    // Keep both uniqueness and capacity checks in the update filter so concurrent adds
+    // cannot bypass either constraint.
     const watchlist = await Watchlist.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        user: req.user.id,
-        "movies.movieId": { $ne: movieId }, // movie must NOT already exist
-      },
+      buildAddMovieFilter({
+        watchlistId: req.params.id,
+        userId: req.user.id,
+        movieId,
+      }),
       {
         $push: {
           movies: { movieId, movieTitle, posterPath, createdAt: new Date() },
@@ -114,7 +121,24 @@ router.post("/:id/movies", auth, async (req, res) => {
     );
 
     if (!watchlist) {
-      return res.status(400).json({ msg: "Movie already in list" });
+      const current = await Watchlist.findOne({
+        _id: req.params.id,
+        user: req.user.id,
+      }).select({ movies: 1 });
+
+      if (!current) {
+        return res.status(404).json({ msg: "Watchlist not found" });
+      }
+
+      if (current.movies.some((movie) => Number(movie.movieId) === Number(movieId))) {
+        return res.status(400).json({ msg: "Movie already in list" });
+      }
+
+      if (current.movies.length >= MAX_MOVIES_PER_WATCHLIST) {
+        return res.status(400).json({ msg: `Watchlist is full (max ${MAX_MOVIES_PER_WATCHLIST} movies)` });
+      }
+
+      return res.status(409).json({ msg: "Watchlist changed. Please try again." });
     }
 
     res.json(watchlist.movies);
@@ -132,7 +156,7 @@ router.put(
   "/:id",
   [
     auth,
-    check("name", "Name must be under 100 characters").optional().isLength({ max: 100 }),
+    updateWatchlistNameValidator,
     check("description", "Description must be under 500 characters").optional().isLength({ max: 500 }),
   ],
   async (req, res) => {

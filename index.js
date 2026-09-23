@@ -13,15 +13,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // database connection
 const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("✅ MongoDB Connected");
-  } catch (err) {
-    console.error("❌ MongoDB Connection Error:", err.message);
-    process.exit(1); // stop app on db error
-  }
+  await mongoose.connect(process.env.MONGO_URI);
+  console.log("✅ MongoDB Connected");
 };
-connectDB();
 
 // keep-alive check
 app.get("/api/keep-alive", async (req, res) => {
@@ -47,7 +41,21 @@ app.get("/", (req, res) => {
   res.send("FilmFolio API is running...");
 });
 
-// listen on all interfaces
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
-});
+// Don't accept requests until MongoDB is ready.
+const startServer = async () => {
+  try {
+    await connectDB();
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`🚀 Server is running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("❌ MongoDB Connection Error:", err.message);
+    process.exit(1);
+  }
+};
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, startServer };
