@@ -2,33 +2,7 @@ const express = require("express");
 const router = express.Router();
 const axios = require("axios");
 const auth = require("../middleware/auth"); // Keep auth for security
-const Redis = require("ioredis");
-
-// Redis with fallback - won't break if unavailable
-let redis = null;
-let redisAvailable = false;
-
-if (process.env.REDIS_URL) {
-  redis = new Redis(process.env.REDIS_URL, {
-    connectTimeout: 5000,
-    commandTimeout: 3000,
-    maxRetriesPerRequest: 1,
-    retryStrategy: (times) => (times > 2 ? null : 500),
-    lazyConnect: true,
-  });
-
-  redis.on("connect", () => {
-    redisAvailable = true;
-    console.log("Redis connected successfully");
-  });
-
-  redis.on("error", (err) => {
-    redisAvailable = false;
-    console.warn(`Redis error: ${err.message}`);
-  });
-
-  redis.connect().catch(() => {});
-}
+const redisConnection = require("../utils/redisClient");
 
 // @route   GET /api/movies/search
 // @desc    Search movies from TMDB with Redis caching
@@ -45,9 +19,9 @@ router.get("/search", auth, async (req, res) => {
 
   // Try the cache first, but only if Redis is available
   let cachedData = null;
-  if (redis && redisAvailable) {
+  if (redisConnection.isAvailable) {
     try {
-      cachedData = await redis.get(cacheKey);
+      cachedData = await redisConnection.client.get(cacheKey);
     } catch (redisError) {
       // Redis went down mid-request - that's fine, we'll just fetch from the API
       console.warn(`Redis unavailable, skipping cache: ${redisError.message}`);
@@ -80,9 +54,9 @@ router.get("/search", auth, async (req, res) => {
       }));
 
     // Try to cache the results, but only if Redis is available
-    if (redis && redisAvailable) {
+    if (redisConnection.isAvailable) {
       try {
-        await redis.set(cacheKey, JSON.stringify(formattedMovies), "EX", 3600);
+        await redisConnection.client.set(cacheKey, JSON.stringify(formattedMovies), "EX", 3600);
       } catch (redisError) {
         console.warn(`Failed to cache results: ${redisError.message}`);
       }

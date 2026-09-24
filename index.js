@@ -6,6 +6,13 @@ const mongoose = require("mongoose");
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Use the forwarded client IP for IP-based limits behind the Cloud Run proxy.
+const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS || 1);
+if (!Number.isInteger(trustProxyHops) || trustProxyHops < 0) {
+  throw new Error("TRUST_PROXY_HOPS must be a non-negative integer.");
+}
+app.set("trust proxy", trustProxyHops);
+
 // middleware
 app.use(cors());
 app.use(express.json());

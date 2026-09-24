@@ -4,6 +4,10 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { check, validationResult } = require("express-validator");
 const User = require("../models/User");
+const createLoginRateLimit = require("../middleware/loginRateLimit");
+const redisConnection = require("../utils/redisClient");
+
+const loginRateLimit = createLoginRateLimit(redisConnection);
 
 // register user
 router.post(
@@ -49,6 +53,7 @@ router.post(
 // login user
 router.post(
   "/login",
+  loginRateLimit,
   [
     check("email", "Please include a valid email").isEmail(),
     check("password", "Password is required").exists(),
