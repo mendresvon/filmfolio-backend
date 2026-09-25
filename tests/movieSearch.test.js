@@ -7,7 +7,7 @@ delete process.env.REDIS_URL;
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
-const { MAX_SEARCH_QUERY_LENGTH } = require("../utils/movieSearch");
+const { MAX_SEARCH_QUERY_CODE_POINTS } = require("../utils/movieSearch");
 const redisConnection = require("../utils/redisClient");
 
 let redisGetCalls = 0;
@@ -71,24 +71,36 @@ test("rejects missing and empty queries before Redis or TMDB work", async () => 
 });
 
 test("accepts a query at the maximum length", async () => {
-  const response = await search("a".repeat(MAX_SEARCH_QUERY_LENGTH));
+  for (const query of [
+    "a".repeat(MAX_SEARCH_QUERY_CODE_POINTS),
+    "😀".repeat(MAX_SEARCH_QUERY_CODE_POINTS),
+  ]) {
+    const response = await search(query);
 
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), []);
-  assert.equal(redisGetCalls, 1);
-  assert.equal(tmdbCalls, 1);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), []);
+  }
+
+  assert.equal(redisGetCalls, 2);
+  assert.equal(tmdbCalls, 2);
 });
 
 test("rejects an overlong query before Redis or TMDB work", async () => {
   redisGetCalls = 0;
   tmdbCalls = 0;
 
-  const response = await search("a".repeat(MAX_SEARCH_QUERY_LENGTH + 1));
+  for (const query of [
+    "a".repeat(MAX_SEARCH_QUERY_CODE_POINTS + 1),
+    "😀".repeat(MAX_SEARCH_QUERY_CODE_POINTS + 1),
+  ]) {
+    const response = await search(query);
 
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), {
-    msg: `Search query must be ${MAX_SEARCH_QUERY_LENGTH} characters or fewer`,
-  });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      msg: `Search query must be ${MAX_SEARCH_QUERY_CODE_POINTS} Unicode code points or fewer`,
+    });
+  }
+
   assert.equal(redisGetCalls, 0);
   assert.equal(tmdbCalls, 0);
 });
