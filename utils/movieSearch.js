@@ -1,0 +1,3 @@
+const MAX_SEARCH_QUERY_LENGTH = 100;
+
+module.exports = { MAX_SEARCH_QUERY_LENGTH };

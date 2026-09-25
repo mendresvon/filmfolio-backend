@@ -3,6 +3,7 @@ const router = express.Router();
 const axios = require("axios");
 const auth = require("../middleware/auth"); // Keep auth for security
 const redisConnection = require("../utils/redisClient");
+const { MAX_SEARCH_QUERY_LENGTH } = require("../utils/movieSearch");
 
 // @route   GET /api/movies/search
 // @desc    Search movies from TMDB with Redis caching
@@ -10,9 +11,15 @@ const redisConnection = require("../utils/redisClient");
 router.get("/search", auth, async (req, res) => {
   const query = req.query.query;
 
-  // 1. Validation: Ensure a query exists
-  if (!query) {
+  // Validate before touching Redis or TMDB.
+  if (typeof query !== "string" || query.trim().length === 0) {
     return res.status(400).json({ msg: "Search query is required" });
+  }
+
+  if (query.length > MAX_SEARCH_QUERY_LENGTH) {
+    return res.status(400).json({
+      msg: `Search query must be ${MAX_SEARCH_QUERY_LENGTH} characters or fewer`,
+    });
   }
 
   const cacheKey = `movies:search:${query.toLowerCase().trim()}`;

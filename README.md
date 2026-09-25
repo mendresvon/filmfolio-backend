@@ -137,8 +137,9 @@ Authorization: Bearer <JWT_TOKEN>
 * **URL:** `/api/movies/search`
 * **Method:** `GET`
 * **Access:** Private
-* **Query Parameters:** `query` (string, required)
+* **Query Parameters:** `query` (string, required, 1–100 characters)
 * **Success Response:** `200 OK` (Utilizes Redis Cache if available)
+* **Error Response:** `400 Bad Request` when the query is missing, empty, or longer than 100 characters. Invalid queries are rejected before Redis or TMDB is accessed.
   ```json
   [
     {
@@ -433,8 +434,9 @@ Authorization: Bearer <JWT_TOKEN>
 * **URL:** `/api/movies/search`
 * **Method:** `GET`
 * **Access:** 受保護 (Private)
-* **Query Parameters:** `query` (字串, 必填)
+* **Query Parameters:** `query` (字串，必填，1–100 個字元)
 * **成功回應:** `200 OK` (若 Redis 可用，將優先使用快取資料)
+* **錯誤回應:** 查詢缺少、空白或超過 100 個字元時回傳 `400 Bad Request`。無效查詢會在存取 Redis 或 TMDB 前遭到拒絕。
   ```json
   [
     {
