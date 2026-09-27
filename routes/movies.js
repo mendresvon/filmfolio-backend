@@ -40,7 +40,21 @@ router.get("/search", auth, async (req, res) => {
 
   if (cachedData) {
     console.log(`Cache Hit for: ${query}`);
-    return res.json(JSON.parse(cachedData));
+    try {
+      const cachedMovies = JSON.parse(cachedData);
+      if (!Array.isArray(cachedMovies)) {
+        throw new TypeError("Cached movie search data must be an array");
+      }
+      return res.json(cachedMovies);
+    } catch {
+      // Treat corrupt cache data as a miss so one bad entry cannot break search.
+      console.warn(`Invalid cached movie search data for: ${query}`);
+      try {
+        await redisConnection.client.del(cacheKey);
+      } catch (redisError) {
+        console.warn(`Failed to remove invalid cache entry: ${redisError.message}`);
+      }
+    }
   }
 
   // Cache miss or Redis unavailable - fetch from TMDB

@@ -11,7 +11,10 @@ const { MAX_SEARCH_QUERY_CODE_POINTS } = require("../utils/movieSearch");
 const redisConnection = require("../utils/redisClient");
 
 let redisGetCalls = 0;
+let redisDeleteCalls = 0;
 let tmdbCalls = 0;
+let cachedData = null;
+let failRedisDelete = false;
 
 const originalAxiosGet = axios.get;
 
@@ -19,7 +22,13 @@ Object.defineProperty(redisConnection, "client", {
   value: {
     async get() {
       redisGetCalls += 1;
-      return null;
+      return cachedData;
+    },
+    async del() {
+      redisDeleteCalls += 1;
+      if (failRedisDelete) throw new Error("Redis unavailable");
+      cachedData = null;
+      return 1;
     },
     async set() {
       return "OK";
@@ -103,4 +112,25 @@ test("rejects an overlong query before Redis or TMDB work", async () => {
 
   assert.equal(redisGetCalls, 0);
   assert.equal(tmdbCalls, 0);
+});
+
+test("treats malformed cache data as a miss and fetches fresh results", async () => {
+  redisGetCalls = 0;
+  redisDeleteCalls = 0;
+  tmdbCalls = 0;
+
+  for (const [index, value] of ["{invalid-json", "null"].entries()) {
+    cachedData = value;
+    failRedisDelete = index === 1;
+
+    const response = await search("Arrival");
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), []);
+  }
+
+  failRedisDelete = false;
+  assert.equal(redisGetCalls, 2);
+  assert.equal(redisDeleteCalls, 2);
+  assert.equal(tmdbCalls, 2);
 });
