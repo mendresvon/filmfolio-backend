@@ -15,6 +15,7 @@ let redisDeleteCalls = 0;
 let tmdbCalls = 0;
 let cachedData = null;
 let failRedisDelete = false;
+const rateLimitBuckets = new Map();
 
 const originalAxiosGet = axios.get;
 
@@ -32,6 +33,19 @@ Object.defineProperty(redisConnection, "client", {
     },
     async set() {
       return "OK";
+    },
+    async eval(_script, _numberOfKeys, key, windowMs) {
+      const currentTime = Date.now();
+      let bucket = rateLimitBuckets.get(key);
+
+      if (!bucket || bucket.resetAt <= currentTime) {
+        bucket = { count: 0, resetAt: currentTime + windowMs };
+      }
+
+      bucket.count += 1;
+      rateLimitBuckets.set(key, bucket);
+
+      return [bucket.count, Math.max(0, bucket.resetAt - currentTime)];
     },
   },
 });
@@ -59,12 +73,12 @@ after(async () => {
   axios.get = originalAxiosGet;
 });
 
-async function search(query) {
+async function search(query, authToken = token) {
   const url = new URL("/api/movies/search", `http://127.0.0.1:${server.address().port}`);
   if (query !== undefined) url.searchParams.set("query", query);
 
   return fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${authToken}` },
   });
 }
 
@@ -133,4 +147,33 @@ test("treats malformed cache data as a miss and fetches fresh results", async ()
   assert.equal(redisGetCalls, 2);
   assert.equal(redisDeleteCalls, 2);
   assert.equal(tmdbCalls, 2);
+});
+
+test("limits movie searches before reading Redis or calling TMDB", async () => {
+  const rateLimitedToken = jwt.sign({ user: { id: "rate-limited-user" } }, process.env.JWT_SECRET);
+  const originalLog = console.log;
+  console.log = () => {};
+  redisGetCalls = 0;
+  tmdbCalls = 0;
+  cachedData = null;
+
+  try {
+    for (let index = 0; index < 60; index += 1) {
+      const response = await search(`Movie ${index}`, rateLimitedToken);
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), []);
+    }
+
+    const blocked = await search("One too many", rateLimitedToken);
+    assert.equal(blocked.status, 429);
+    assert.ok(Number(blocked.headers.get("Retry-After")) > 0);
+    assert.deepEqual(await blocked.json(), {
+      msg: "Too many movie searches. Please try again later.",
+    });
+  } finally {
+    console.log = originalLog;
+  }
+
+  assert.equal(redisGetCalls, 60);
+  assert.equal(tmdbCalls, 60);
 });
