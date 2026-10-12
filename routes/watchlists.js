@@ -3,6 +3,7 @@ const router = express.Router();
 const { check, validationResult } = require("express-validator");
 const auth = require("../middleware/auth");
 const Watchlist = require("../models/Watchlist");
+const { parseMovieId } = require("../validators/movieValidators");
 const {
   MAX_MOVIES_PER_WATCHLIST,
   buildAddMovieFilter,
@@ -83,10 +84,15 @@ router.get("/:id", auth, async (req, res) => {
 
 // Add movie only when the ID is unique and the list is below its limit.
 router.post("/:id/movies", auth, async (req, res) => {
-  const { movieId, movieTitle, posterPath } = req.body;
+  const { movieTitle, posterPath } = req.body || {};
+  const movieId = parseMovieId(req.body?.movieId);
 
-  if (!movieId || !movieTitle) {
-    return res.status(400).json({ msg: "movieId and movieTitle are required" });
+  if (movieId === null) {
+    return res.status(400).json({ msg: "movieId must be a positive safe integer" });
+  }
+
+  if (typeof movieTitle !== "string" || movieTitle.trim().length === 0) {
+    return res.status(400).json({ msg: "movieTitle must be a nonempty string" });
   }
 
   try {
@@ -214,10 +220,15 @@ router.delete("/:id", auth, async (req, res) => {
 
 // remove movie from watchlist - uses atomic $pull for efficiency
 router.delete("/:watchlistId/movies/:movieId", auth, async (req, res) => {
+  const movieId = parseMovieId(req.params.movieId);
+  if (movieId === null) {
+    return res.status(400).json({ msg: "movieId must be a positive safe integer" });
+  }
+
   try {
     const result = await Watchlist.updateOne(
       { _id: req.params.watchlistId, user: req.user.id },
-      { $pull: { movies: { movieId: parseInt(req.params.movieId) } } }
+      { $pull: { movies: { movieId } } }
     );
 
     if (result.matchedCount === 0) {

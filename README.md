@@ -206,6 +206,8 @@ Authorization: Bearer <JWT_TOKEN>
 * **URL:** `/api/watchlists/:id/movies`
 * **Method:** `POST`
 * **Access:** Private (Atomic, Max 500 movies/list)
+* **Validation:** `movieId` must be a positive safe integer (1–9007199254740991), supplied as a JSON number or a digit-only string (e.g. `550` or `"550"`). Strings are normalized to numbers. `movieTitle` must be a string containing at least one non-whitespace character; valid titles are stored unchanged. `posterPath` remains optional and may be `null` for TMDB movies without a poster.
+* **Error Response:** `400 Bad Request` for invalid IDs or titles, before any watchlist database access. ID errors return `{ "msg": "movieId must be a positive safe integer" }`; title errors return `{ "msg": "movieTitle must be a nonempty string" }`.
 * **Request Body:**
   ```json
   {
@@ -220,6 +222,8 @@ Authorization: Bearer <JWT_TOKEN>
 * **URL:** `/api/watchlists/:watchlistId/movies/:movieId`
 * **Method:** `DELETE`
 * **Access:** Private (Atomic)
+* **Validation:** `movieId` must contain only decimal digits and represent a positive safe integer (1–9007199254740991). Values such as `123abc`, `-123`, `123.5`, and whitespace are rejected rather than partially parsed.
+* **Error Response:** Invalid IDs return `400 Bad Request` with `{ "msg": "movieId must be a positive safe integer" }` before database access. An omitted/empty ID path does not match the route and returns `404 Not Found` without modifying a watchlist.
 * **Success Response:** `200 OK`
   ```json
   { "msg": "Movie removed" }
@@ -503,6 +507,8 @@ Authorization: Bearer <JWT_TOKEN>
 * **URL:** `/api/watchlists/:id/movies`
 * **Method:** `POST`
 * **Access:** 受保護 (Private, 原子操作, 單一清單上限 500 部電影)
+* **輸入驗證：** `movieId` 必須是正安全整數（1–9007199254740991），可使用 JSON 數字或僅含十進位數字的字串（例如 `550` 或 `"550"`）。字串會轉為數字。`movieTitle` 必須是包含至少一個非空白字元的字串，有效片名會原樣儲存。`posterPath` 仍為選填，TMDB 電影沒有海報時可使用 `null`。
+* **錯誤回應：** 無效 ID 或片名會在存取待看清單資料庫前回傳 `400 Bad Request`。ID 錯誤回傳 `{ "msg": "movieId must be a positive safe integer" }`；片名錯誤回傳 `{ "msg": "movieTitle must be a nonempty string" }`。
 * **Request Body:**
   ```json
   {
@@ -517,6 +523,8 @@ Authorization: Bearer <JWT_TOKEN>
 * **URL:** `/api/watchlists/:watchlistId/movies/:movieId`
 * **Method:** `DELETE`
 * **Access:** 受保護 (Private, 原子操作)
+* **輸入驗證：** `movieId` 必須僅含十進位數字，且代表正安全整數（1–9007199254740991）。`123abc`、`-123`、`123.5` 或空白等輸入會遭到拒絕，不會進行部分解析。
+* **錯誤回應：** 無效 ID 會在存取資料庫前回傳 `400 Bad Request`，內容為 `{ "msg": "movieId must be a positive safe integer" }`。省略 ID 或使用空 ID 路徑時，不會符合此路由，會回傳 `404 Not Found`，且不會修改待看清單。
 * **成功回應:** `200 OK`
   ```json
   { "msg": "Movie removed" }
