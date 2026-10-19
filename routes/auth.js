@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { check, validationResult } = require("express-validator");
+const { body, validationResult } = require("express-validator");
 const User = require("../models/User");
 const createLoginRateLimit = require("../middleware/loginRateLimit");
 const redisConnection = require("../utils/redisClient");
@@ -13,8 +13,14 @@ const loginRateLimit = createLoginRateLimit(redisConnection);
 router.post(
   "/register",
   [
-    check("email", "Please include a valid email").isEmail(),
-    check("password", "Password must be at least 6 characters").isLength({ min: 6 }),
+    body("email", "Please include a valid email")
+      .custom((value) => typeof value === "string")
+      .bail()
+      .isEmail(),
+    body("password", "Password must be at least 6 characters")
+      .custom((value) => typeof value === "string")
+      .bail()
+      .isLength({ min: 6 }),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -55,8 +61,14 @@ router.post(
   "/login",
   loginRateLimit,
   [
-    check("email", "Please include a valid email").isEmail(),
-    check("password", "Password is required").exists(),
+    body("email", "Please include a valid email")
+      .custom((value) => typeof value === "string")
+      .bail()
+      .isEmail(),
+    body("password", "Password is required")
+      .custom((value) => typeof value === "string")
+      .bail()
+      .notEmpty(),
   ],
   async (req, res) => {
     const errors = validationResult(req);
