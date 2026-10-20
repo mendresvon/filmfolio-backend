@@ -197,6 +197,9 @@ router.put(
       res.json(watchlist);
     } catch (err) {
       console.error(err.message);
+      if (err.kind === "ObjectId") {
+        return res.status(404).json({ msg: "Watchlist not found" });
+      }
       res.status(500).send("Server Error");
     }
   }
@@ -214,6 +217,9 @@ router.delete("/:id", auth, async (req, res) => {
     res.json({ msg: "Watchlist removed" });
   } catch (err) {
     console.error(err.message);
+    if (err.kind === "ObjectId") {
+      return res.status(404).json({ msg: "Watchlist not found" });
+    }
     res.status(500).send("Server Error");
   }
 });
